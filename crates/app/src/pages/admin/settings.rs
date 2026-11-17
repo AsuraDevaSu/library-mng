@@ -47,6 +47,16 @@ pub fn SettingsPage() -> impl IntoView {
                                         <input class=INPUT type="number" min="0" max="1" step="0.001" name="input[face_match_threshold]"
                                             value=s.face_match_threshold.to_string() required=true/>
                                     </label>
+                                    <label class=LABEL>
+                                        "Tag prefix (1–3 capital letters)"
+                                        <input class=INPUT name="input[bag_tag_prefix]" pattern="[A-Z]{1,3}" maxlength="3"
+                                            value=s.bag_tag_prefix required=true/>
+                                    </label>
+                                    <label class=LABEL>
+                                        "Number of tags (e.g. 200 → B-001 … B-200)"
+                                        <input class=INPUT type="number" min="1" max="999" name="input[bag_tag_count]"
+                                            value=s.bag_tag_count.to_string() required=true/>
+                                    </label>
                                 </CardContent>
                             </Card>
                             <div class="flex flex-wrap items-center gap-4">

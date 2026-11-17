@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/domain", "crates/infra", "crates/api", "crates/app", "crates/frontend", "crates/server"]
+members = ["crates/domain", "crates/vision", "crates/infra", "crates/api", "crates/app", "crates/frontend", "crates/server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +11,7 @@ license = "MIT"
 # internal
 domain = { path = "crates/domain" }
 infra = { path = "crates/infra" }
+vision = { path = "crates/vision" }
 api = { path = "crates/api" }
 app = { path = "crates/app", default-features = false }
 
@@ -68,3 +69,17 @@ reload-port = 3001
 browserquery = "defaults"
 env = "DEV"
 lib-profile-release = "wasm-release"
+
+# Face models are slow unoptimised; keep inference fast in dev builds.
+[profile.dev.package.tract-core]
+opt-level = 3
+[profile.dev.package.tract-linalg]
+opt-level = 3
+[profile.dev.package.tract-onnx]
+opt-level = 3
+[profile.dev.package.tract-hir]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.vision]
+opt-level = 3

@@ -39,6 +39,31 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
+/// Like [`AuthUser`] but also accepts the web UI's session cookie, so `<img>`
+/// tags on staff pages can load protected photos. Only used on GET routes.
+#[derive(Debug, Clone, Copy)]
+pub struct StaffAuth(pub AuthUser);
+
+impl FromRequestParts<AppState> for StaffAuth {
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let bearer = parts
+            .headers
+            .get(AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "));
+        let cookie = parts
+            .headers
+            .get(axum::http::header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(session::token_from_cookie_header);
+        let token = bearer.or(cookie).ok_or(AppError::Unauthorized)?;
+        let user = session::user_from_token(state, token).await?;
+        Ok(StaffAuth(AuthUser { id: user.id, role: user.role }))
+    }
+}
+
 /// `Json<T>` that also runs `validator` rules; failures become 422 with field errors.
 pub struct ValidJson<T>(pub T);
 

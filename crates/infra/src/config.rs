@@ -12,6 +12,10 @@ pub struct Config {
     pub cors_origins: Vec<String>,
     /// If set and the users table is empty, an admin is created at startup.
     pub bootstrap_admin: Option<(String, String)>,
+    /// Where bag-desk photos are stored (never inside the public site root).
+    pub bag_photo_dir: std::path::PathBuf,
+    /// Folder with the YuNet / SFace ONNX models (see scripts/fetch-models.sh).
+    pub models_dir: std::path::PathBuf,
 }
 
 impl Config {
@@ -40,6 +44,8 @@ impl Config {
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect(),
+            bag_photo_dir: env::var("BAG_PHOTO_DIR").unwrap_or_else(|_| "data/bag-photos".into()).into(),
+            models_dir: env::var("MODELS_DIR").unwrap_or_else(|_| "models".into()).into(),
             bootstrap_admin: match (env::var("ADMIN_EMAIL"), env::var("ADMIN_PASSWORD")) {
                 (Ok(e), Ok(p)) if !e.is_empty() && !p.is_empty() => Some((e, p)),
                 _ => None,

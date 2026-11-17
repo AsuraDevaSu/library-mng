@@ -10,7 +10,7 @@ use axum::{
 };
 use infra::AppState;
 
-pub use extract::{AuthUser, ValidJson};
+pub use extract::{AuthUser, StaffAuth, ValidJson};
 
 pub fn router(state: AppState) -> Router {
     use routes::*;
@@ -24,5 +24,6 @@ pub fn router(state: AppState) -> Router {
         .route("/circulation/checkout", post(circulation::checkout))
         .route("/circulation/return", post(circulation::return_copy))
         .route("/loans/{id}/renew", post(circulation::renew))
+        .route("/bags/{id}/photo/{kind}", get(bags::photo))
         .with_state(state)
 }

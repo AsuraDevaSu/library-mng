@@ -78,7 +78,10 @@ async fn disabled_or_demoted_user_takes_effect_immediately(db: PgPool) {
             cookie_secure: false,
             cors_origins: vec![],
             bootstrap_admin: None,
+            bag_photo_dir: std::env::temp_dir(),
+            models_dir: "models".into(),
         }),
+        faces: None,
     };
     let boss = staff(&db, "boss@lib.test", Role::Admin).await;
     let lib = staff(&db, "lib@lib.test", Role::Librarian).await;

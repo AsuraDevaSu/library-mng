@@ -13,3 +13,4 @@ serde_json.workspace = true
 uuid.workspace = true
 validator.workspace = true
 tracing.workspace = true
+tokio.workspace = true

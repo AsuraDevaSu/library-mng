@@ -81,6 +81,35 @@ demoted or disabled, and admins can't demote or disable themselves.
 Every server function checks the role on the server (`auth::ssr::require`) — the
 UI redirect is convenience, not security.
 
+## Bag deposit desk (ដាក់ផ្ញើកាតាប)
+
+`/desk` for desk staff (and librarians/admins):
+
+- **Drop-off** — student name (+ optional card), face photo, bag photo → the server
+  detects the bag colour, computes a face embedding and assigns the lowest free tag
+  (`B-001 … B-200`, prefix/count in admin Settings). Students can opt out of the face
+  photo; their bag is then found by tag or name.
+- **Pickup** — "Scan face" compares the face only with bags currently at the desk
+  and shows the top 3 with drop-off face photo, bag photo, colour and tag. Staff confirm
+  visually, then **Hand over**. Search by name/tag is always available.
+- **At the desk** — everything currently deposited.
+
+Face models (pure Rust inference with `tract`, no native runtime):
+
+```bash
+scripts/fetch-models.sh   # YuNet (MIT) + SFace (Apache-2.0) from the OpenCV Model Zoo, checksum-verified
+```
+
+Without the models the desk still works (tag/name pickup only).
+
+Privacy: photos live in `BAG_PHOTO_DIR` (outside the site root) and are served only to
+logged-in staff (`/api/v1/bags/{id}/photo/{face|bag}`, `no-store`). Photos are re-encoded
+(EXIF/GPS stripped). The face embedding is erased at hand-over; pickup scans are never
+stored; an hourly job deletes photos `bag_photo_retention_days` after pickup.
+
+Camera: browsers only allow it on `localhost` or HTTPS. On other devices over plain HTTP,
+use **Use a photo file** (phones open the camera from it).
+
 ## Design notes
 
 - **Double checkout** is prevented by an atomic `UPDATE copies … WHERE status = 'available'`

@@ -59,7 +59,7 @@ pub async fn login(email: String, password: String) -> Result<(), ServerFnError>
     let cookie = HeaderValue::from_str(&session::session_cookie(&token, &state))
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     expect_context::<leptos_axum::ResponseOptions>().append_header(SET_COOKIE, cookie);
-    leptos_axum::redirect(if user.role == Role::Admin { "/admin" } else { "/" });
+    leptos_axum::redirect(if user.role == Role::Admin { "/admin" } else { "/desk" });
     Ok(())
 }
 

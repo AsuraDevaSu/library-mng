@@ -29,7 +29,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = db::connect(&config).await?;
     db::migrate(&pool).await?;
     db::bootstrap_admin(&pool, &config).await?;
-    let state = AppState { db: pool, config: Arc::new(config) };
+    let faces = match vision::FaceEngine::load(&config.models_dir) {
+        Ok(engine) => {
+            tracing::info!(dir = %config.models_dir.display(), "face models loaded");
+            Some(Arc::new(engine))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "face models not loaded; bag desk will use tag/name pickup only (run scripts/fetch-models.sh)");
+            None
+        }
+    };
+    let state = AppState { db: pool, config: Arc::new(config), faces };
+
+    // Hourly: delete bag-desk photos past their retention period.
+    tokio::spawn({
+        let state = state.clone();
+        async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(3600));
+            loop {
+                tick.tick().await;
+                match infra::service::bags::cleanup(&state).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!(deposits = n, "deleted expired bag photos"),
+                    Err(e) => tracing::error!(error = ?e, "bag photo cleanup failed"),
+                }
+            }
+        }
+    });
 
     // ---- leptos ----
     // `cargo leptos` passes the [workspace.metadata.leptos] settings via LEPTOS_* env vars.

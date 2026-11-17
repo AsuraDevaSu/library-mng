@@ -161,7 +161,8 @@ pub async fn update_member_type(db: &PgPool, id: Uuid, input: &MemberTypeInput, 
 
 // ---------------- settings ----------------
 
-const SETTINGS_COLS: &str = "library_name, opening_hours, bag_photo_retention_days, face_match_threshold, updated_at";
+const SETTINGS_COLS: &str =
+    "library_name, opening_hours, bag_photo_retention_days, face_match_threshold, bag_tag_prefix, bag_tag_count, updated_at";
 
 pub async fn get_settings(db: &PgPool) -> AppResult<LibrarySettings> {
     Ok(sqlx::query_as(&format!("SELECT {SETTINGS_COLS} FROM library_settings WHERE id = 1")).fetch_one(db).await?)
@@ -170,7 +171,8 @@ pub async fn get_settings(db: &PgPool) -> AppResult<LibrarySettings> {
 pub async fn update_settings(db: &PgPool, input: &SettingsInput, actor: Uuid) -> AppResult<LibrarySettings> {
     let s: LibrarySettings = sqlx::query_as(&format!(
         "UPDATE library_settings SET library_name = $1, opening_hours = $2, bag_photo_retention_days = $3,
-                face_match_threshold = $4, updated_at = now(), updated_by = $5
+                face_match_threshold = $4, bag_tag_prefix = $6, bag_tag_count = $7,
+                updated_at = now(), updated_by = $5
           WHERE id = 1 RETURNING {SETTINGS_COLS}"
     ))
     .bind(input.library_name.trim())
@@ -178,6 +180,8 @@ pub async fn update_settings(db: &PgPool, input: &SettingsInput, actor: Uuid) ->
     .bind(input.bag_photo_retention_days)
     .bind(input.face_match_threshold)
     .bind(actor)
+    .bind(&input.bag_tag_prefix)
+    .bind(input.bag_tag_count)
     .fetch_one(db)
     .await?;
     audit::log(db, actor, "settings.update", "settings", Uuid::nil(), serde_json::to_value(input).unwrap_or_default())

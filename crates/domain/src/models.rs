@@ -194,6 +194,8 @@ pub struct LibrarySettings {
     pub opening_hours: String,
     pub bag_photo_retention_days: i32,
     pub face_match_threshold: f32,
+    pub bag_tag_prefix: String,
+    pub bag_tag_count: i32,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -232,6 +234,65 @@ pub struct AuditEntry {
     /// JSON text.
     pub details: String,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", sqlx(type_name = "deposit_status", rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum DepositStatus {
+    Deposited,
+    Returned,
+    Unclaimed,
+}
+
+/// A bag at (or previously at) the deposit desk. Photos are fetched separately
+/// from `/api/v1/bags/{id}/photo/{face|bag}` (staff only).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
+pub struct BagDeposit {
+    pub id: Uuid,
+    pub student_name: String,
+    pub tag_number: String,
+    pub has_face_photo: bool,
+    pub has_bag_photo: bool,
+    pub bag_color: String,
+    pub bag_color_hex: String,
+    pub photo_consent: bool,
+    pub status: DepositStatus,
+    pub deposited_at: DateTime<Utc>,
+    /// "HH:MM" in the library's timezone, filled in by the server.
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deposited_local: String,
+    pub deposited_by_name: Option<String>,
+    pub returned_at: Option<DateTime<Utc>>,
+    pub match_method: Option<String>,
+    pub match_score: Option<f32>,
+}
+
+/// A pickup candidate from a face scan.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BagMatch {
+    pub deposit: BagDeposit,
+    /// Cosine similarity, 0–1.
+    pub score: f32,
+    /// Score is at or above the configured face-match threshold.
+    pub confident: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FaceScanResult {
+    pub faces_found: usize,
+    pub matches: Vec<BagMatch>,
+}
+
+/// Tags in use vs. available, for the desk header.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeskSummary {
+    pub in_use: i64,
+    pub capacity: i32,
+    /// Face models are installed on the server.
+    pub face_search: bool,
 }
 
 /// Result of returning a copy: the closed loan and an overdue fine, if any.

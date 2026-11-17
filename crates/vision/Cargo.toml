@@ -1,0 +1,10 @@
+[package]
+name = "vision"
+description = "Face detection (YuNet), face embeddings (SFace) and bag colour — pure Rust via tract."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tract-onnx = "0.23"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+thiserror.workspace = true

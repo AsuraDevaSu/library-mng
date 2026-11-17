@@ -8,6 +8,7 @@ edition.workspace = true
 app = { workspace = true, features = ["ssr"] }
 api.workspace = true
 infra.workspace = true
+vision.workspace = true
 leptos = { workspace = true, features = ["ssr"] }
 leptos_axum.workspace = true
 axum.workspace = true

@@ -24,6 +24,8 @@ macro_rules! outcome {
 
 pub mod admin_fns;
 pub mod auth;
+pub mod camera;
+pub mod desk_fns;
 pub mod pages;
 pub mod server_fns;
 pub mod ui;
@@ -44,6 +46,7 @@ use pages::{
         settings::SettingsPage, staff::StaffPage,
     },
     books::BooksPage,
+    desk::{AtDeskPage, DeskLayout, deposit::DepositPage, pickup::PickupPage},
     home::HomePage,
     login::LoginPage,
 };
@@ -89,6 +92,11 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("") view=HomePage/>
                     <Route path=StaticSegment("books") view=BooksPage/>
                     <Route path=StaticSegment("login") view=LoginPage/>
+                    <ParentRoute path=StaticSegment("desk") view=DeskLayout>
+                        <Route path=StaticSegment("") view=AtDeskPage/>
+                        <Route path=StaticSegment("deposit") view=DepositPage/>
+                        <Route path=StaticSegment("pickup") view=PickupPage/>
+                    </ParentRoute>
                     <ParentRoute path=StaticSegment("admin") view=AdminLayout>
                         <Route path=StaticSegment("") view=DashboardPage/>
                         <Route path=StaticSegment("staff") view=StaffPage/>
@@ -138,6 +146,7 @@ fn UserMenu() -> impl IntoView {
                         let is_admin = user.role == Role::Admin;
                         view! {
                             <div class="flex items-center gap-3">
+                                <ButtonLink href="/desk" variant=Variant::Outline size=Size::Sm>"Bag desk"</ButtonLink>
                                 {is_admin.then(|| view! {
                                     <ButtonLink href="/admin" variant=Variant::Brand size=Size::Sm>"Admin"</ButtonLink>
                                 })}
@@ -166,7 +175,10 @@ fn SiteFooter() -> impl IntoView {
     let location = use_location();
     let info = Resource::new(|| (), |_| server_fns::get_site_info());
     view! {
-        <Show when=move || !location.pathname.get().starts_with("/admin")>
+        <Show when=move || {
+            let p = location.pathname.get();
+            !p.starts_with("/admin") && !p.starts_with("/desk")
+        }>
             <footer class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10">
                 <div class="rounded-t-card bg-primary px-8 pt-12 pb-8 text-primary-foreground md:px-14">
                     <div class="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">

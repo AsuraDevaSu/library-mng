@@ -81,6 +81,47 @@ pub struct SettingsInput {
     pub bag_photo_retention_days: i32,
     #[validate(range(min = 0.0, max = 1.0))]
     pub face_match_threshold: f32,
+    #[validate(regex(path = *TAG_PREFIX_RE, message = "1–3 capital letters"))]
+    pub bag_tag_prefix: String,
+    #[validate(range(min = 1, max = 999))]
+    pub bag_tag_count: i32,
+}
+
+pub static TAG_PREFIX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Z]{1,3}$").unwrap());
+
+/// Colours offered for bags at the desk (name, swatch hex). The server's
+/// automatic colour detection returns one of these names.
+pub const BAG_COLORS: [(&str, &str); 13] = [
+    ("Black", "#1f1f1f"),
+    ("White", "#f4f4f4"),
+    ("Grey", "#8c8c8c"),
+    ("Red", "#d23b3b"),
+    ("Orange", "#ee8a2a"),
+    ("Brown", "#7a4e2d"),
+    ("Yellow", "#f0d03c"),
+    ("Green", "#3fa34d"),
+    ("Teal", "#1f9e9a"),
+    ("Blue", "#2f6fd6"),
+    ("Navy", "#1f2f5c"),
+    ("Purple", "#7d4cc2"),
+    ("Pink", "#e46aa8"),
+];
+
+/// Drop-off form. Photos are `data:image/jpeg;base64,…` URLs from the desk camera.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct DepositInput {
+    #[validate(length(min = 1, max = 200))]
+    pub student_name: String,
+    /// Optional student card to link the deposit to a member.
+    pub card_number: Option<String>,
+    /// Student agreed to the face photo. Without consent the bag is found by tag/name only.
+    pub photo_consent: bool,
+    #[validate(length(max = 6_000_000))]
+    pub face_photo: Option<String>,
+    #[validate(length(min = 100, max = 6_000_000))]
+    pub bag_photo: String,
+    /// Staff correction of the detected colour (one of `BAG_COLORS`).
+    pub bag_color: Option<String>,
 }
 
 fn non_negative(v: &Decimal) -> Result<(), ValidationError> {
