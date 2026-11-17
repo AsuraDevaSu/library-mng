@@ -1,0 +1,32 @@
+[package]
+name = "app"
+description = "Leptos UI: components + server functions (ssr / hydrate)."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+domain.workspace = true
+leptos.workspace = true
+leptos_meta.workspace = true
+leptos_router.workspace = true
+serde.workspace = true
+uuid.workspace = true
+leptos_axum = { workspace = true, optional = true }
+infra = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+validator = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+[features]
+default = []
+hydrate = ["leptos/hydrate"]
+ssr = [
+  "leptos/ssr",
+  "leptos_meta/ssr",
+  "leptos_router/ssr",
+  "dep:leptos_axum",
+  "dep:infra",
+  "dep:axum",
+  "dep:validator",
+  "dep:tracing",
+]

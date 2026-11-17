@@ -1,0 +1,76 @@
+/* Tailwind v4 + shadcn/ui theme tokens, themed after the Positivus design
+   (lime #B9FF66, ink #191A23, grey #F3F3F3, Space Grotesk, offset "brutal" shadows). */
+@import "tailwindcss";
+
+/* Scan the Leptos components for class names. */
+@source "../crates";
+
+:root {
+  /* shadcn/ui token names, Positivus values */
+  --radius: 0.875rem;                 /* 14px: buttons, inputs */
+  --background: #ffffff;
+  --foreground: #191a23;
+  --card: #ffffff;
+  --card-foreground: #191a23;
+  --popover: #ffffff;
+  --popover-foreground: #191a23;
+  --primary: #191a23;                 /* dark buttons */
+  --primary-foreground: #ffffff;
+  --secondary: #f3f3f3;
+  --secondary-foreground: #191a23;
+  --muted: #f3f3f3;
+  --muted-foreground: #5f6068;
+  --accent: #b9ff66;                  /* Positivus lime */
+  --accent-foreground: #191a23;
+  --destructive: #d9363e;
+  --destructive-foreground: #ffffff;
+  --border: #191a23;                  /* strong outlines on cards & inputs */
+  --hairline: #e2e2e6;                /* table dividers */
+  --input: #191a23;
+  --ring: #b9ff66;
+}
+
+@theme inline {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-hairline: var(--hairline);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-card: 2.8125rem;           /* 45px Positivus cards */
+
+  --shadow-brut: 0 5px 0 0 var(--border);
+  --shadow-brut-sm: 0 3px 0 0 var(--border);
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  ::selection { background: var(--accent); color: var(--accent-foreground); }
+  /* Native <details> accordion: hide the default marker. */
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+}

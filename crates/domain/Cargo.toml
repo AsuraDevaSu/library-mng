@@ -1,0 +1,20 @@
+[package]
+name = "domain"
+description = "Entities and business rules. Pure: no IO, compiles to WASM."
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+# derive sqlx::Type / FromRow — enabled only by server-side crates
+sqlx = ["dep:sqlx"]
+
+[dependencies]
+serde.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+rust_decimal.workspace = true
+validator.workspace = true
+regex.workspace = true
+thiserror.workspace = true
+sqlx = { workspace = true, optional = true }

@@ -1,0 +1,15 @@
+[package]
+name = "api"
+description = "REST API (/api/v1) — consumed by the Flutter app and other clients."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+domain = { workspace = true, features = ["sqlx"] }
+infra.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+validator.workspace = true
+tracing.workspace = true

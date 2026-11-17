@@ -1,0 +1,22 @@
+[package]
+name = "infra"
+description = "Server-side: config, database, repositories, auth, circulation services."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+domain = { workspace = true, features = ["sqlx"] }
+axum.workspace = true
+tokio.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+rust_decimal.workspace = true
+argon2.workspace = true
+jsonwebtoken.workspace = true
+dotenvy.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+validator.workspace = true
