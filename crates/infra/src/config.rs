@@ -14,6 +14,8 @@ pub struct Config {
     pub bootstrap_admin: Option<(String, String)>,
     /// Where bag-desk photos are stored (never inside the public site root).
     pub bag_photo_dir: std::path::PathBuf,
+    /// Book covers and e-book PDFs (served through the API, not the site root).
+    pub book_files_dir: std::path::PathBuf,
     /// Folder with the YuNet / SFace ONNX models (see scripts/fetch-models.sh).
     pub models_dir: std::path::PathBuf,
 }
@@ -45,6 +47,7 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .collect(),
             bag_photo_dir: env::var("BAG_PHOTO_DIR").unwrap_or_else(|_| "data/bag-photos".into()).into(),
+            book_files_dir: env::var("BOOK_FILES_DIR").unwrap_or_else(|_| "data/books".into()).into(),
             models_dir: env::var("MODELS_DIR").unwrap_or_else(|_| "models".into()).into(),
             bootstrap_admin: match (env::var("ADMIN_EMAIL"), env::var("ADMIN_PASSWORD")) {
                 (Ok(e), Ok(p)) if !e.is_empty() && !p.is_empty() => Some((e, p)),

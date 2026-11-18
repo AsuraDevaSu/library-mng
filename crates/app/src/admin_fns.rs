@@ -107,3 +107,60 @@ pub async fn audit_log(q: String, page: i64) -> Result<Vec<AuditEntry>, ServerFn
         .await
         .map_err(to_sfe)
 }
+
+// ---------- books (librarians and admins) ----------
+
+#[server]
+pub async fn admin_books(q: String) -> Result<Vec<domain::models::BookSummary>, ServerFnError> {
+    let (state, _) = require(Role::Librarian).await?;
+    infra::repo::books::search(&state.db, &q, "", false, 100, 0).await.map_err(to_sfe)
+}
+
+#[server]
+pub async fn admin_book(id: Uuid) -> Result<domain::models::BookDetail, ServerFnError> {
+    let (state, _) = require(Role::Librarian).await?;
+    let book = infra::repo::books::get(&state.db, id).await.map_err(to_sfe)?;
+    let copies = infra::repo::books::copies(&state.db, id).await.map_err(to_sfe)?;
+    Ok(domain::models::BookDetail { book, copies })
+}
+
+/// Creates the book and opens its edit page (to add a cover / PDF).
+#[server]
+pub async fn create_book(form: domain::dto::BookForm) -> Result<Uuid, ServerFnError> {
+    let (state, me) = require(Role::Librarian).await?;
+    let req = form.to_create().map_err(ServerFnError::new)?;
+    validate(&req)?;
+    let book = infra::repo::books::create(&state.db, &req, me.id).await.map_err(to_sfe)?;
+    leptos_axum::redirect(&format!("/admin/books/{}?created=1", book.id));
+    Ok(book.id)
+}
+
+#[server]
+pub async fn update_book(id: Uuid, form: domain::dto::BookForm) -> Result<(), ServerFnError> {
+    let (state, me) = require(Role::Librarian).await?;
+    let req = form.to_update().map_err(ServerFnError::new)?;
+    validate(&req)?;
+    infra::repo::books::update(&state.db, id, &req, me.id).await.map_err(to_sfe)?;
+    Ok(())
+}
+
+#[server]
+pub async fn add_book_copies(id: Uuid, barcodes: String, shelf_location: String) -> Result<(), ServerFnError> {
+    let (state, me) = require(Role::Librarian).await?;
+    let shelf = shelf_location.trim();
+    let req = domain::dto::AddCopiesRequest {
+        barcodes: domain::dto::split_codes(&barcodes),
+        shelf_location: (!shelf.is_empty()).then(|| shelf.to_string()),
+    };
+    validate(&req)?;
+    infra::repo::books::add_copies(&state.db, id, &req, me.id).await.map_err(to_sfe)?;
+    Ok(())
+}
+
+#[server]
+pub async fn delete_book(id: Uuid) -> Result<(), ServerFnError> {
+    let (state, me) = require(Role::Librarian).await?;
+    infra::service::book_files::delete_book(&state, id, me.id).await.map_err(to_sfe)?;
+    leptos_axum::redirect("/admin/books");
+    Ok(())
+}

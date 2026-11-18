@@ -61,11 +61,14 @@ name = "api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "domain",
  "infra",
  "serde",
  "serde_json",
  "tokio",
+ "tower",
+ "tower-http",
  "tracing",
  "uuid",
  "validator",

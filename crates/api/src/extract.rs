@@ -40,7 +40,8 @@ impl FromRequestParts<AppState> for AuthUser {
 }
 
 /// Like [`AuthUser`] but also accepts the web UI's session cookie, so `<img>`
-/// tags on staff pages can load protected photos. Only used on GET routes.
+/// tags on staff pages can load protected photos and the admin page can upload
+/// files. The cookie is `SameSite=Lax`; write routes also check `Origin`.
 #[derive(Debug, Clone, Copy)]
 pub struct StaffAuth(pub AuthUser);
 

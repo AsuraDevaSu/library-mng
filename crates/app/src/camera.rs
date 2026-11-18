@@ -1,10 +1,15 @@
-//! Desk camera: live `<video>` preview with JPEG capture, plus a photo-file
+//! Desk camera: off by default; turns on only to take a photo (and off right
+//! after, or after a minute idle). JPEG capture, plus a photo-file
 //! fallback (phones/tablets over plain HTTP, or no webcam). Browser-only code
 //! is behind the `hydrate` feature; on the server this renders an empty frame.
 
 use leptos::{html, prelude::*};
 
 use crate::ui::{Size, Variant, button_class};
+
+/// The camera switches itself off if no photo is taken within this time.
+#[cfg(feature = "hydrate")]
+const AUTO_OFF_SECS: u64 = 60;
 
 #[component]
 pub fn Camera(
@@ -20,38 +25,80 @@ pub fn Camera(
 ) -> impl IntoView {
     let video = NodeRef::<html::Video>::new();
     let (error, set_error) = signal(None::<String>);
-    let (ready, set_ready) = signal(false);
+    // The camera is off by default and only on while a photo is being taken.
+    let (live, set_live) = signal(false);
+    let (starting, set_starting) = signal(false);
+    // Bumped on every close, so an old auto-off timer can't close a newer session.
+    let session = StoredValue::new(0u32);
 
     #[cfg(feature = "hydrate")]
-    {
-        let stream = StoredValue::new_local(None::<web_sys::MediaStream>);
-        Effect::new(move |_| {
-            if let Some(v) = video.get() {
-                leptos::task::spawn_local(async move {
-                    match imp::start(&v).await {
-                        Ok(s) => {
-                            stream.set_value(Some(s));
-                            set_ready.set(true);
-                        }
-                        Err(e) => set_error.set(Some(e)),
-                    }
-                });
-            }
-        });
-        on_cleanup(move || {
+    let stream = StoredValue::new_local(None::<web_sys::MediaStream>);
+
+    let close = move || {
+        #[cfg(feature = "hydrate")]
+        {
             if let Some(s) = stream.try_get_value().flatten() {
                 imp::stop(&s);
             }
-        });
-    }
+            let _ = stream.try_update_value(|s| *s = None);
+            if let Some(v) = video.get_untracked() {
+                v.set_src_object(None);
+            }
+        }
+        session.update_value(|g| *g += 1);
+        set_live.set(false);
+    };
+
+    let open = move || {
+        if live.get_untracked() || starting.get_untracked() {
+            return;
+        }
+        set_error.set(None);
+        #[cfg(feature = "hydrate")]
+        if let Some(v) = video.get_untracked() {
+            set_starting.set(true);
+            leptos::task::spawn_local(async move {
+                let result = imp::start(&v).await;
+                set_starting.set(false);
+                match result {
+                    Ok(s) => {
+                        stream.set_value(Some(s));
+                        set_live.set(true);
+                        // Turn the camera off if nobody takes a photo within a minute.
+                        let this_session = session.get_value();
+                        set_timeout(
+                            move || {
+                                if session.try_get_value() == Some(this_session) {
+                                    close();
+                                }
+                            },
+                            std::time::Duration::from_secs(AUTO_OFF_SECS),
+                        );
+                    }
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        }
+    };
+
+    // Leaving the page always releases the camera.
+    #[cfg(feature = "hydrate")]
+    on_cleanup(move || {
+        if let Some(s) = stream.try_get_value().flatten() {
+            imp::stop(&s);
+        }
+    });
     #[cfg(not(feature = "hydrate"))]
-    let _ = (set_error, set_ready, on_capture);
+    let _ = (set_starting, on_capture);
 
     let capture = move |_| {
         #[cfg(feature = "hydrate")]
         if let Some(v) = video.get_untracked() {
             match imp::capture(&v) {
-                Some(url) => on_capture.run(url),
+                Some(url) => {
+                    close();
+                    on_capture.run(url);
+                }
                 None => set_error.set(Some("The camera isn't ready yet.".into())),
             }
         }
@@ -84,24 +131,56 @@ pub fn Camera(
                     playsinline=true
                     muted=true
                     class="h-full w-full object-cover"
+                    class:invisible=move || !live.get()
                     class:-scale-x-100=move || mirror.get()
                 ></video>
-                {move || {
-                    let msg = error.get().or_else(|| (!ready.get()).then(|| "Starting camera…".to_string()));
-                    msg.map(|m| view! {
-                        <div class="absolute inset-0 grid place-items-center p-8 text-center text-sm text-white/90">{m}</div>
-                    })
-                }}
+                {move || live.get().then(|| view! {
+                    <span class="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-destructive px-2.5 py-1 text-xs font-medium text-destructive-foreground">
+                        <span class="size-2 rounded-full bg-white"></span>
+                        "Camera on"
+                    </span>
+                })}
+                {move || (!live.get()).then(|| {
+                    let (title, detail) = if starting.get() {
+                        ("Starting camera…".to_string(), String::new())
+                    } else if let Some(e) = error.get() {
+                        ("Camera unavailable".to_string(), e)
+                    } else {
+                        ("Camera is off".to_string(), "It turns on only while you take a photo.".to_string())
+                    };
+                    view! {
+                        <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 p-8 text-center text-white/90">
+                            <svg class="size-10 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>
+                            </svg>
+                            <p class="font-medium">{title}</p>
+                            <p class="text-sm text-white/70">{detail}</p>
+                        </div>
+                    }
+                })}
             </div>
             <div class="flex flex-wrap gap-3">
-                <button
-                    type="button"
-                    class=button_class(Variant::Brand, Size::Lg)
-                    disabled=move || disabled.get() || !ready.get()
-                    on:click=capture
+                <Show
+                    when=move || live.get()
+                    fallback=move || view! {
+                        <button
+                            type="button"
+                            class=button_class(Variant::Brand, Size::Lg)
+                            disabled=move || disabled.get() || starting.get()
+                            on:click=move |_| open()
+                        >
+                            {move || capture_label.get()}
+                        </button>
+                    }
                 >
-                    {move || capture_label.get()}
-                </button>
+                    <button type="button" class=button_class(Variant::Brand, Size::Lg) on:click=capture>
+                        "Capture photo"
+                    </button>
+                    <button type="button" class=button_class(Variant::Outline, Size::Lg) on:click=move |_| close()>
+                        "Cancel"
+                    </button>
+                </Show>
                 <label class=format!("{} cursor-pointer", button_class(Variant::Outline, Size::Lg))>
                     "Use a photo file"
                     <input type="file" accept="image/*" class="sr-only" on:change=on_file/>

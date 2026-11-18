@@ -51,7 +51,7 @@ pub fn PickupPage() -> impl IntoView {
                             class=INPUT
                             type="search"
                             aria-label="Search by name or tag"
-                            placeholder="Name or tag, e.g. B-042"
+                            placeholder="Name, tag or ID card, e.g. B-042"
                             prop:value=query
                             on:input=move |ev| set_query.set(event_target_value(&ev))
                         />

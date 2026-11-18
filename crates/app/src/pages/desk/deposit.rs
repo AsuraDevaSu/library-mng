@@ -79,7 +79,7 @@ pub fn DepositPage() -> impl IntoView {
     };
 
     view! {
-        <PageTitle title="Drop-off" subtitle="Name → face photo → bag photo → attach the tag shown."/>
+        <PageTitle title="Drop-off" subtitle="For every student and teacher, no membership needed. Name → face photo → bag photo → attach the tag."/>
         <Show
             when=move || receipt.with(Option::is_some)
             fallback=move || view! {
@@ -96,13 +96,13 @@ pub fn DepositPage() -> impl IntoView {
                                 <Alert variant=AlertVariant::Destructive>{err_msg(&e)}</Alert>
                             })}
                             <label class=LABEL>
-                                "Student name"
+                                "Name (student or teacher)"
                                 <input class=INPUT required=true autocomplete="off" prop:value=name
                                     on:input=move |ev| name.set(event_target_value(&ev))/>
                             </label>
                             <label class=LABEL>
-                                "Student card (optional)"
-                                <input class=INPUT autocomplete="off" placeholder="Scan or type" prop:value=card
+                                "ID card number (optional)"
+                                <input class=INPUT autocomplete="off" placeholder="Student or teacher card. No library membership needed" prop:value=card
                                     on:input=move |ev| card.set(event_target_value(&ev))/>
                             </label>
                             <label class="flex items-start gap-3 text-sm">

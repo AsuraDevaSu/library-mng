@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::{AppError, AppResult, AppState, repo::audit, repo::like_pattern, service::admin};
 
 const SELECT: &str = r#"
-    SELECT d.id, d.student_name, d.tag_number,
+    SELECT d.id, d.student_name, d.card_number, d.tag_number,
            (d.face_photo IS NOT NULL AND d.photos_deleted_at IS NULL) AS has_face_photo,
            (d.photos_deleted_at IS NULL)                            AS has_bag_photo,
            d.bag_color, d.bag_color_hex, d.photo_consent, d.status, d.deposited_at,
@@ -131,16 +131,14 @@ pub async fn deposit(state: &AppState, input: DepositInput, staff: Uuid) -> AppR
         }
     };
 
-    // ---- optional member card
-    let member_id: Option<Uuid> = match input.card_number.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+    // ---- optional ID card: anyone may drop a bag; link to a member only if the card matches one
+    let card_number = input.card_number.as_deref().map(|c| c.trim().to_uppercase()).filter(|c| !c.is_empty());
+    let member_id: Option<Uuid> = match &card_number {
         None => None,
-        Some(card) => Some(
-            sqlx::query_scalar("SELECT id FROM members WHERE card_number = upper($1)")
-                .bind(card)
-                .fetch_optional(db)
-                .await?
-                .ok_or(AppError::NotFound("member with this card"))?,
-        ),
+        Some(card) => sqlx::query_scalar("SELECT id FROM members WHERE card_number = $1")
+            .bind(card)
+            .fetch_optional(db)
+            .await?,
     };
 
     // ---- write photos, then the row (files are removed again if the insert fails)
@@ -153,7 +151,11 @@ pub async fn deposit(state: &AppState, input: DepositInput, staff: Uuid) -> AppR
         tokio::fs::write(dir.join(f), bytes).await.map_err(|e| AppError::Internal(e.to_string()))?;
     }
 
-    let result = insert_with_free_tag(db, id, &input, member_id, face_file.as_deref(), &bag_file, &color_name, &color_hex, embedding, staff).await;
+    let result = insert_with_free_tag(
+        db, id, &input, card_number.as_deref(), member_id, face_file.as_deref(), &bag_file, &color_name, &color_hex,
+        embedding, staff,
+    )
+    .await;
     if result.is_err() {
         let _ = tokio::fs::remove_file(dir.join(&bag_file)).await;
         if let Some(f) = &face_file {
@@ -172,6 +174,7 @@ async fn insert_with_free_tag(
     db: &PgPool,
     id: Uuid,
     input: &DepositInput,
+    card_number: Option<&str>,
     member_id: Option<Uuid>,
     face_file: Option<&str>,
     bag_file: &str,
@@ -198,8 +201,8 @@ async fn insert_with_free_tag(
         };
         let res = sqlx::query(
             "INSERT INTO bag_deposits (id, student_name, member_id, tag_number, face_photo, bag_photo,
-                                       bag_color, bag_color_hex, face_embedding, photo_consent, deposited_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                                       bag_color, bag_color_hex, face_embedding, photo_consent, deposited_by, card_number)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         )
         .bind(id)
         .bind(input.student_name.trim())
@@ -212,6 +215,7 @@ async fn insert_with_free_tag(
         .bind(&embedding)
         .bind(input.photo_consent)
         .bind(staff)
+        .bind(card_number)
         .execute(db)
         .await;
         match res {
@@ -232,12 +236,12 @@ pub async fn get(db: &PgPool, id: Uuid) -> AppResult<BagDeposit> {
         .ok_or(AppError::NotFound("bag deposit"))
 }
 
-/// Bags currently at the desk, optionally filtered by name or exact tag.
+/// Bags currently at the desk, optionally filtered by name, exact tag or exact ID card.
 pub async fn list_active(db: &PgPool, q: &str) -> AppResult<Vec<BagDeposit>> {
     let q = q.trim();
     Ok(sqlx::query_as(&format!(
         "{SELECT} WHERE d.status = 'deposited'
-            AND ($1 = '' OR d.tag_number = upper($1) OR d.student_name ILIKE $2)
+            AND ($1 = '' OR d.tag_number = upper($1) OR d.card_number = upper($1) OR d.student_name ILIKE $2)
           ORDER BY d.deposited_at DESC LIMIT 200"
     ))
     .bind(q)
@@ -343,4 +347,69 @@ pub async fn cleanup(state: &AppState) -> AppResult<usize> {
             .await?;
     }
     Ok(rows.len())
+}
+
+/// Every bag still at the desk, ordered by tag — for the end-of-day list / export.
+pub async fn export_active(db: &PgPool) -> AppResult<Vec<BagDeposit>> {
+    Ok(sqlx::query_as(&format!("{SELECT} WHERE d.status = 'deposited' ORDER BY d.tag_number"))
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(localize)
+        .collect())
+}
+
+/// CSV of bags at the desk (no photos). UTF-8 with BOM so Excel shows Khmer names
+/// correctly; cells starting with `= + - @` are prefixed with `'` so a name can't
+/// run as a spreadsheet formula.
+pub fn to_csv(bags: &[BagDeposit]) -> String {
+    fn cell(v: &str) -> String {
+        let v = if v.starts_with(['=', '+', '-', '@', '\t', '\r']) { format!("'{v}") } else { v.to_string() };
+        if v.contains([',', '"', '\n', '\r']) { format!("\"{}\"", v.replace('"', "\"\"")) } else { v }
+    }
+    let mut out = String::from("\u{feff}Tag,Student name,ID card,Bag colour,Deposited at\r\n");
+    for b in bags {
+        let at = b.deposited_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string();
+        let row = [b.tag_number.as_str(), &b.student_name, b.card_number.as_deref().unwrap_or(""), &b.bag_color, &at];
+        out.push_str(&row.iter().map(|c| cell(c)).collect::<Vec<_>>().join(","));
+        out.push_str("\r\n");
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::models::DepositStatus;
+
+    fn bag(name: &str, card: Option<&str>) -> BagDeposit {
+        BagDeposit {
+            id: Uuid::nil(),
+            student_name: name.into(),
+            card_number: card.map(Into::into),
+            tag_number: "B-007".into(),
+            has_face_photo: true,
+            has_bag_photo: true,
+            bag_color: "Navy".into(),
+            bag_color_hex: "#1f2f5c".into(),
+            photo_consent: true,
+            status: DepositStatus::Deposited,
+            deposited_at: chrono::Utc::now(),
+            deposited_local: String::new(),
+            deposited_by_name: None,
+            returned_at: None,
+            match_method: None,
+            match_score: None,
+        }
+    }
+
+    #[test]
+    fn csv_escapes_and_neutralises_formulas() {
+        let csv = to_csv(&[bag("Chan, Sokha", Some("STU-1")), bag("=HYPERLINK(\"x\")", None), bag("សុខា", None)]);
+        let lines: Vec<&str> = csv.split("\r\n").collect();
+        assert!(lines[0].starts_with('\u{feff}'));
+        assert!(lines[1].starts_with("B-007,\"Chan, Sokha\",STU-1,Navy,"));
+        assert!(lines[2].starts_with("B-007,\"'=HYPERLINK(\"\"x\"\")\",,Navy,"));
+        assert!(lines[3].starts_with("B-007,សុខា,,Navy,"));
+    }
 }

@@ -9,11 +9,12 @@ use crate::{
 pub fn LoginPage() -> impl IntoView {
     let auth = expect_context::<AuthCtx>();
     view! {
-        <div class="mx-auto max-w-md py-12">
+        <crate::pages::admin::StaffBar/>
+        <div class="mx-auto max-w-md px-4 py-16">
             <Card class="bg-card">
                 <CardHeader class="p-8 pb-4">
                     <h1 class="text-3xl font-medium"><Highlight>"Staff login"</Highlight></h1>
-                    <CardDescription class="mt-2 text-base">"For librarians, desk staff and admins."</CardDescription>
+                    <CardDescription class="mt-2 text-base">"For librarians, desk staff and admins. Students and teachers don't need an account — the catalog is open to everyone."</CardDescription>
                 </CardHeader>
                 <CardContent class="px-8 pb-8">
                     {outcome!(auth.login, "")}

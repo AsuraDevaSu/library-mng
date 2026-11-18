@@ -11,6 +11,8 @@ use crate::{
 pub fn DashboardPage() -> impl IntoView {
     let data = Resource::new(|| (), |_| admin_dashboard());
     view! {
+        // Librarians manage books but don't see the admin dashboard.
+        <super::RequireRole role=domain::models::Role::Admin fallback="/admin/books"/>
         <PageTitle title="Dashboard" subtitle="Today at a glance."/>
         <Suspense fallback=|| view! { <p class="text-muted-foreground">"Loading…"</p> }>
             {move || Suspend::new(async move {

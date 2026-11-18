@@ -22,6 +22,7 @@ fn state(db: &PgPool, dir: &std::path::Path) -> AppState {
             cors_origins: vec![],
             bootstrap_admin: None,
             bag_photo_dir: dir.to_path_buf(),
+            book_files_dir: dir.join("books"),
             models_dir: "models".into(),
         }),
         faces: None,
@@ -88,6 +89,13 @@ async fn tags_are_assigned_and_reused(db: PgPool) {
 
     // Handing over twice is refused.
     assert!(matches!(bags::hand_over(&db, a.id, "tag", None, me).await, Err(AppError::Conflict(_))));
+
+    // Any ID card is accepted (no membership needed) and is searchable.
+    let mut input = opt_out("Teacher Lina");
+    input.card_number = Some("t-2024-77".into());
+    let t = bags::deposit(&st, input, me).await.unwrap();
+    assert_eq!(t.card_number.as_deref(), Some("T-2024-77"));
+    assert_eq!(bags::list_active(&db, "T-2024-77").await.unwrap()[0].id, t.id);
 
     // Search by name and by tag.
     assert_eq!(bags::list_active(&db, "dara").await.unwrap().len(), 1);

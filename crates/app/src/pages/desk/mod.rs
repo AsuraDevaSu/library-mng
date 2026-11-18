@@ -6,14 +6,14 @@ pub mod pickup;
 use domain::models::{BagDeposit, Role};
 use leptos::prelude::*;
 use leptos_router::{
-    components::{A, Outlet, Redirect},
+    components::{A, Outlet},
     hooks::use_location,
 };
 
 use crate::{
-    auth::{AuthCtx, err_msg},
+    auth::err_msg,
     desk_fns::{HandOverBag, desk_bags},
-    pages::admin::PageTitle,
+    pages::admin::{PageTitle, RequireRole, StaffBar},
     ui::{Alert, AlertVariant, Badge, BadgeVariant, Button, Card, INPUT, Size, Tone, Variant, cn},
 };
 
@@ -22,22 +22,16 @@ const TAB: &str = "whitespace-nowrap rounded-lg px-4 py-2.5 font-medium transiti
 
 #[component]
 pub fn DeskLayout() -> impl IntoView {
-    let auth = expect_context::<AuthCtx>();
     let location = use_location();
     // Refresh the tag counter whenever staff switch tabs.
     let summary = Resource::new(move || location.pathname.get(), |_| desk_bags(String::new()));
 
     view! {
-        <Transition fallback=|| ()>
-            {move || Suspend::new(async move {
-                match auth.user.await {
-                    Ok(Some(u)) if u.role.satisfies(Role::DeskStaff) => ().into_any(),
-                    _ => view! { <Redirect path="/login"/> }.into_any(),
-                }
-            })}
-        </Transition>
-        <div class="py-4">
-            <div class="mb-8 flex flex-col gap-4 rounded-3xl border border-border bg-primary p-3 text-primary-foreground shadow-brut md:flex-row md:items-center">
+        <StaffBar/>
+        <RequireRole role=Role::DeskStaff fallback="/admin/login"/>
+        <main class="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+        <div class="py-6">
+            <div class="print:hidden mb-8 flex flex-col gap-4 rounded-3xl border border-border bg-primary p-3 text-primary-foreground shadow-brut md:flex-row md:items-center">
                 <nav class="flex gap-1 overflow-x-auto">
                     <A href="/desk" exact=true attr:class=TAB>"At the desk"</A>
                     <A href="/desk/deposit" attr:class=TAB>"Drop-off"</A>
@@ -57,6 +51,7 @@ pub fn DeskLayout() -> impl IntoView {
             </div>
             <Outlet/>
         </div>
+        </main>
     }
 }
 
@@ -117,7 +112,10 @@ pub fn BagCard(
                         </Badge>
                     })}
                 </div>
-                <div class="text-xl font-medium">{d.student_name.clone()}</div>
+                <div class="text-xl font-medium">
+                    {d.student_name.clone()}
+                    {d.card_number.clone().map(|c| view! { <span class="ml-2 font-mono text-sm text-muted-foreground">{c}</span> })}
+                </div>
                 <div class="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
                     <ColorSwatch name=d.bag_color.clone() hex=d.bag_color_hex.clone()/>
                     <span>"Since " {d.deposited_local.clone()}</span>
@@ -159,14 +157,33 @@ pub fn AtDeskPage() -> impl IntoView {
     let hand_over = ServerAction::<HandOverBag>::new();
     let bags = Resource::new(move || (query.get(), hand_over.version().get()), |(q, _)| desk_bags(q));
 
+    let print = move |_| {
+        #[cfg(feature = "hydrate")]
+        if let Some(w) = web_sys::window() {
+            let _ = w.print();
+        }
+    };
+
     view! {
-        <PageTitle title="Bags at the desk" subtitle="Newest first. Search by student name or tag number."/>
+      <div class="print:hidden">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <PageTitle title="Bags at the desk" subtitle="Newest first. Search by name, tag number or ID card."/>
+            <div class="flex flex-wrap gap-3">
+                // Plain link: the browser downloads the file using the staff session cookie.
+                <a href="/api/v1/bags/export.csv" download="" class=crate::ui::button_class(Variant::Outline, Size::Md)>
+                    "Download CSV"
+                </a>
+                <button type="button" class=crate::ui::button_class(Variant::Default, Size::Md) on:click=print>
+                    "Print list"
+                </button>
+            </div>
+        </div>
         <HandOverResult action=hand_over/>
         <input
             class=cn(&[INPUT, "mb-6"])
             type="search"
             aria-label="Search bags"
-            placeholder="Name or tag, e.g. Sokha or B-042"
+            placeholder="Name, tag or ID card, e.g. Sokha or B-042"
             prop:value=query
             on:input=move |ev| set_query.set(event_target_value(&ev))
         />
@@ -196,5 +213,51 @@ pub fn AtDeskPage() -> impl IntoView {
                 }
             })}
         </Transition>
+      </div>
+      <PrintList refresh=Signal::derive(move || hand_over.version().get())/>
+    }
+}
+
+/// Print-only list of every bag still at the desk (no photos), for announcing
+/// or posting at closing time. Hidden on screen.
+#[component]
+fn PrintList(#[prop(into)] refresh: Signal<usize>) -> impl IntoView {
+    let all = Resource::new(move || refresh.get(), |_| desk_bags(String::new()));
+    view! {
+        <section class="hidden print:block">
+            <Transition fallback=|| ()>
+                {move || Suspend::new(async move {
+                    all.await.ok().map(|(summary, mut list)| {
+                        list.sort_by(|a, b| a.tag_number.cmp(&b.tag_number));
+                        view! {
+                            <h1 class="mb-1 text-2xl font-bold">"Bags still at the desk"</h1>
+                            <p class="mb-4 text-sm">{format!("{} bag(s) · please collect your bag before the library closes.", summary.in_use)}</p>
+                            <table class="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr class="border-b-2 border-black text-left">
+                                        <th class="py-1 pr-3">"Tag"</th>
+                                        <th class="py-1 pr-3">"Student"</th>
+                                        <th class="py-1 pr-3">"ID card"</th>
+                                        <th class="py-1 pr-3">"Bag colour"</th>
+                                        <th class="py-1">"Since"</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {list.into_iter().map(|d| view! {
+                                        <tr class="border-b border-gray-300 break-inside-avoid">
+                                            <td class="py-1 pr-3 font-bold">{d.tag_number}</td>
+                                            <td class="py-1 pr-3">{d.student_name}</td>
+                                            <td class="py-1 pr-3">{d.card_number.unwrap_or_default()}</td>
+                                            <td class="py-1 pr-3">{d.bag_color}</td>
+                                            <td class="py-1">{d.deposited_local}</td>
+                                        </tr>
+                                    }).collect_view()}
+                                </tbody>
+                            </table>
+                        }
+                    })
+                })}
+            </Transition>
+        </section>
     }
 }

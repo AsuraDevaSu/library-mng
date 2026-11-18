@@ -134,8 +134,30 @@ pub struct BookSummary {
     /// Comma-separated author names.
     pub authors: String,
     pub published_year: Option<i16>,
+    pub category: Option<String>,
     pub total_copies: i64,
     pub available_copies: i64,
+    pub has_cover: bool,
+    /// An e-book (PDF) is uploaded, so the book can be read online.
+    pub has_ebook: bool,
+    /// Changes whenever the book or its files change; used to bust cover caches.
+    pub updated_at: DateTime<Utc>,
+}
+
+impl BookSummary {
+    pub fn cover_url(&self) -> Option<String> {
+        self.has_cover.then(|| cover_url(self.id, self.updated_at))
+    }
+}
+
+/// Public URL of a book cover (`v` busts browser caches after a new upload).
+pub fn cover_url(id: Uuid, updated_at: DateTime<Utc>) -> String {
+    format!("/api/v1/books/{id}/cover?v={}", updated_at.timestamp())
+}
+
+/// Public URL of a book's PDF (served inline, supports range requests).
+pub fn ebook_url(id: Uuid) -> String {
+    format!("/api/v1/books/{id}/ebook")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,7 +171,31 @@ pub struct Book {
     pub published_year: Option<i16>,
     pub language: Option<String>,
     pub description: Option<String>,
+    pub category: Option<String>,
+    /// Comma-separated author names, in order.
+    pub authors: String,
+    pub has_cover: bool,
+    /// Size of the uploaded PDF; `None` = not readable online.
+    pub ebook_bytes: Option<i64>,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl Book {
+    pub fn cover_url(&self) -> Option<String> {
+        self.has_cover.then(|| cover_url(self.id, self.updated_at))
+    }
+    pub fn has_ebook(&self) -> bool {
+        self.ebook_bytes.is_some()
+    }
+}
+
+/// Book page: metadata plus its physical copies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BookDetail {
+    #[serde(flatten)]
+    pub book: Book,
+    pub copies: Vec<Copy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,6 +299,8 @@ pub enum DepositStatus {
 pub struct BagDeposit {
     pub id: Uuid,
     pub student_name: String,
+    /// Student/teacher ID card given at drop-off (any card, not only library members).
+    pub card_number: Option<String>,
     pub tag_number: String,
     pub has_face_photo: bool,
     pub has_bag_photo: bool,

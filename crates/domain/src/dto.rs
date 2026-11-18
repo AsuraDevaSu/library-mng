@@ -112,7 +112,9 @@ pub const BAG_COLORS: [(&str, &str); 13] = [
 pub struct DepositInput {
     #[validate(length(min = 1, max = 200))]
     pub student_name: String,
-    /// Optional student card to link the deposit to a member.
+    /// Optional student/teacher ID card. Anyone may use the desk; the deposit is
+    /// linked to a library member only if the card matches one.
+    #[validate(length(max = 64))]
     pub card_number: Option<String>,
     /// Student agreed to the face photo. Without consent the bag is found by tag/name only.
     pub photo_consent: bool,
@@ -149,10 +151,131 @@ pub struct CreateBookRequest {
     pub published_year: Option<i16>,
     pub language: Option<String>,
     pub description: Option<String>,
+    /// Category name (created if new), e.g. "Science".
+    #[serde(default)]
+    #[validate(length(max = 100))]
+    pub category: Option<String>,
     /// Barcodes of physical copies to register with the book.
     #[validate(length(max = 200))]
     pub copy_barcodes: Vec<String>,
     pub shelf_location: Option<String>,
+}
+
+/// Edit a book's metadata (copies and files are managed separately).
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct UpdateBookRequest {
+    #[validate(regex(path = *ISBN_RE, message = "ISBN must be 10 or 13 digits"))]
+    pub isbn: Option<String>,
+    #[validate(length(min = 1, max = 500))]
+    pub title: String,
+    #[validate(length(max = 500))]
+    pub subtitle: Option<String>,
+    #[validate(length(min = 1, max = 20))]
+    pub authors: Vec<String>,
+    pub publisher: Option<String>,
+    #[validate(range(min = 1000, max = 2100))]
+    pub published_year: Option<i16>,
+    pub language: Option<String>,
+    pub description: Option<String>,
+    #[validate(length(max = 100))]
+    pub category: Option<String>,
+}
+
+/// Register more physical copies of a book.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct AddCopiesRequest {
+    #[validate(length(min = 1, max = 200))]
+    pub barcodes: Vec<String>,
+    pub shelf_location: Option<String>,
+}
+
+/// Flat, all-text book form used by the admin web UI (empty string = not set).
+/// `authors` is comma-separated; `copy_barcodes` is separated by commas,
+/// spaces or new lines.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BookForm {
+    pub title: String,
+    #[serde(default)]
+    pub subtitle: String,
+    pub authors: String,
+    #[serde(default)]
+    pub isbn: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub publisher: String,
+    #[serde(default)]
+    pub published_year: String,
+    #[serde(default)]
+    pub language: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub copy_barcodes: String,
+    #[serde(default)]
+    pub shelf_location: String,
+}
+
+fn opt(s: &str) -> Option<String> {
+    let s = s.trim();
+    (!s.is_empty()).then(|| s.to_string())
+}
+
+/// Splits a list typed by staff (commas, spaces, new lines).
+pub fn split_codes(s: &str) -> Vec<String> {
+    s.split(|c: char| c == ',' || c.is_whitespace())
+        .map(|c| c.trim().to_uppercase())
+        .filter(|c| !c.is_empty())
+        .collect()
+}
+
+impl BookForm {
+    fn year(&self) -> Result<Option<i16>, String> {
+        let y = self.published_year.trim();
+        if y.is_empty() {
+            return Ok(None);
+        }
+        y.parse().map(Some).map_err(|_| "Year must be a number like 2019.".to_string())
+    }
+
+    fn isbn(&self) -> Option<String> {
+        opt(&self.isbn.replace(['-', ' '], "")).map(|i| i.to_uppercase())
+    }
+
+    fn authors(&self) -> Vec<String> {
+        self.authors.split(',').filter_map(opt).collect()
+    }
+
+    pub fn to_create(&self) -> Result<CreateBookRequest, String> {
+        Ok(CreateBookRequest {
+            isbn: self.isbn(),
+            title: self.title.trim().to_string(),
+            subtitle: opt(&self.subtitle),
+            authors: self.authors(),
+            publisher: opt(&self.publisher),
+            published_year: self.year()?,
+            language: opt(&self.language),
+            description: opt(&self.description),
+            category: opt(&self.category),
+            copy_barcodes: split_codes(&self.copy_barcodes),
+            shelf_location: opt(&self.shelf_location),
+        })
+    }
+
+    pub fn to_update(&self) -> Result<UpdateBookRequest, String> {
+        let c = self.to_create()?;
+        Ok(UpdateBookRequest {
+            isbn: c.isbn,
+            title: c.title,
+            subtitle: c.subtitle,
+            authors: c.authors,
+            publisher: c.publisher,
+            published_year: c.published_year,
+            language: c.language,
+            description: c.description,
+            category: c.category,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
@@ -187,6 +310,12 @@ pub struct ReturnRequest {
 pub struct SearchQuery {
     #[serde(default)]
     pub q: String,
+    /// Exact category name; empty = all.
+    #[serde(default)]
+    pub category: String,
+    /// Only books that can be read online.
+    #[serde(default)]
+    pub online: bool,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]

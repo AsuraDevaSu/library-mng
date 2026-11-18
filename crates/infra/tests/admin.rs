@@ -79,6 +79,7 @@ async fn disabled_or_demoted_user_takes_effect_immediately(db: PgPool) {
             cors_origins: vec![],
             bootstrap_admin: None,
             bag_photo_dir: std::env::temp_dir(),
+            book_files_dir: std::env::temp_dir(),
             models_dir: "models".into(),
         }),
         faces: None,

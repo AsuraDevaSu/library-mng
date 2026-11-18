@@ -84,6 +84,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/v1", api::router(state.clone()).layer(cors(&state.config.cors_origins)))
         .merge(web)
         .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
+        // Book PDF uploads can be slow on school Wi-Fi: own, longer timeout.
+        .nest(
+            "/api/v1",
+            api::upload_router(state.clone())
+                .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(15 * 60))),
+        )
         .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
